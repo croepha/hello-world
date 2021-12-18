@@ -1,7 +1,5 @@
 
-// clang-10 -Werror -Wall -g -O0 -fsanitize=address chat.c -o /build/chat.exec
-
-#define _GNU_SOURCE
+// clang -fuse-ld=lld -Werror -Wall -g -O0 -fsanitize=address shmem_chat.cpp -o build/chat.exec
 
 #include <stdarg.h>
 #include <errno.h>
@@ -11,6 +9,7 @@
 #include <string.h>
 #include <fcntl.h>
 #include <termios.h>
+#include <stdlib.h>
 #include <sys/mman.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -36,7 +35,7 @@ struct sockaddr_un const server_socket_addr = {
 char * server_data;
 int write_cursor;
 
-void write_buf(char const * fmt, ...) {
+static void write_buf(char const * fmt, ...) {
     va_list va;
     va_start(va, fmt);
     char buf[1024];
@@ -46,12 +45,31 @@ void write_buf(char const * fmt, ...) {
 
 }
 
+// Defines buf for scratch space ignore it
+// fds is defined as an int* this is an erray of fds_len length
+// msg is a pointer that you pass to sendmsg/recvmsg
+#define fdlist_msg(buf, fds, msg, fds_len) \
+    alignas(alignof(cmsghdr)) char buf[CMSG_SPACE(sizeof(int) * (fds_len))]; \
+    msghdr msg; int * fds; __fdlist_msg(buf, sizeof buf, &msg, &fds, (fds_len))
+inline static void __fdlist_msg(char * buf, size_t buf_size, msghdr * msg, int ** fds, int number_of_fds) {
+        *msg = { .msg_control = buf, .msg_controllen = buf_size };
+        struct cmsghdr * cmsg  = CMSG_FIRSTHDR(msg);
+        *cmsg = { .cmsg_len = CMSG_LEN(sizeof(int) * number_of_fds), .cmsg_level = SOL_SOCKET, .cmsg_type = SCM_RIGHTS, };
+        *fds = (int *) (void*) CMSG_DATA(cmsg);
+}
+
+
 int main (int argc, char ** argv) { int r;
+
+    if (!argv[0]) {
+        fprintf(stderr, "specify `server' or `client'\n");
+        abort();
+    }
 
     if (strcmp(argv[1], "server") == 0) {
         int server_data_fd = memfd_create("server", MFD_CLOEXEC);
         ftruncate(server_data_fd, server_data_size);
-        server_data = mmap(0, server_data_size, PROT_WRITE, MAP_SHARED, server_data_fd, 0);
+        server_data = (char*)mmap(0, server_data_size, PROT_WRITE, MAP_SHARED, server_data_fd, 0);
 
         server_socket = socket(AF_UNIX, SOCK_SEQPACKET|SOCK_CLOEXEC|SOCK_NONBLOCK,  0);
         unlink(server_socket_addr.sun_path);
@@ -66,20 +84,9 @@ int main (int argc, char ** argv) { int r;
                 write_buf("\nnew_client %lld connected\n", client_pages_next - client_pages);
                 int client_data_fd = memfd_create("client", MFD_CLOEXEC);
                 ftruncate(client_data_fd, client_data_size);
-                *client_pages_next++ = mmap(0, client_data_size, PROT_READ, MAP_SHARED, client_data_fd, 0);
+                *client_pages_next++ = (char*)mmap(0, client_data_size, PROT_READ, MAP_SHARED, client_data_fd, 0);
 
-                _Alignas(_Alignof(struct cmsghdr)) char buf[CMSG_SPACE(sizeof(int) * 2)];
-                struct msghdr msg = {
-                    .msg_control = buf,
-                    .msg_controllen = sizeof(buf),
-                };
-
-                struct cmsghdr * cmsg  = CMSG_FIRSTHDR(&msg);
-                cmsg->cmsg_level = SOL_SOCKET;
-                cmsg->cmsg_type = SCM_RIGHTS;
-                cmsg->cmsg_len = CMSG_LEN(sizeof(int) * 2);
-
-                int * fdptr = (int *) (void*) CMSG_DATA(cmsg);
+                fdlist_msg(buf, fdptr, msg, 2);
                 fdptr[0] = server_data_fd;
                 fdptr[1] = client_data_fd;
 
@@ -109,18 +116,8 @@ int main (int argc, char ** argv) { int r;
         int server_fd = socket(AF_UNIX, SOCK_SEQPACKET|SOCK_CLOEXEC,  0);
         connect(server_fd, (struct sockaddr*)&server_socket_addr, sizeof server_socket_addr);
 
-        _Alignas(_Alignof(struct cmsghdr)) char buf[CMSG_SPACE(sizeof(int) * 2)];
-        struct msghdr msg = {
-            .msg_control = buf,
-            .msg_controllen = sizeof(buf),
-        };
 
-        struct cmsghdr * cmsg  = CMSG_FIRSTHDR(&msg);
-        cmsg->cmsg_level = SOL_SOCKET;
-        cmsg->cmsg_type = SCM_RIGHTS;
-        cmsg->cmsg_len = CMSG_LEN(sizeof(int) * 2);
-
-        int * fdptr = (int *) (void*) CMSG_DATA(cmsg);
+        fdlist_msg(buf, fdptr, msg, 2);
         fdptr[0] = -1;
         fdptr[1] = -1;
 
@@ -128,9 +125,9 @@ int main (int argc, char ** argv) { int r;
         error_check(r);
         close(server_fd);
 
-        server_data = mmap(0, server_data_size, PROT_READ, MAP_SHARED, fdptr[0], 0);
+        server_data = (char*)mmap(0, server_data_size, PROT_READ, MAP_SHARED, fdptr[0], 0);
         close(fdptr[0]);
-        char * client_data = mmap(0, client_data_size, PROT_WRITE, MAP_SHARED, fdptr[1], 0);
+        char * client_data = (char*)mmap(0, client_data_size, PROT_WRITE, MAP_SHARED, fdptr[1], 0);
         close(fdptr[1]);
 
         int read_cursor = 0;
