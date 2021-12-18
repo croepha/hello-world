@@ -1,3 +1,16 @@
+/*
+
+This is a very silly example of doing client/server IO using shared memmory.  This was used in a debate 
+over whether or not shared memory between untrusted clients and servers could be done securely.  I maintain
+that it can be done securely if you structure your code so that you only read each byte from the the 
+untrusted buffer once, and often you can do this fine without even having to do a bunch of extra copies..
+
+I do want to say that is rarely the right tool for the job, AF_UNIX/SOCK_SEQPACKET is a much better tool
+for this job, and the spinlocks don't really scale well for idle/intermittent workloads, best save that for high
+throughput operations...
+
+*/
+
 
 // clang -fuse-ld=lld -Werror -Wall -g -O0 -fsanitize=address shmem_chat.cpp -o build/chat.exec
 
@@ -145,6 +158,8 @@ int main (int argc, char ** argv) { int r;
         }
 
         for (;;) {
+            // This is the main IO loop for a client, the only syscalls we do is to read/write to the stdin/stdout
+            // all client/server communication is done with memory operations
             int written = read(0, client_data + write_cursor, client_data_size - write_cursor);
             if (written > 0) {
                 write_cursor = ( write_cursor + written ) % client_data_size;
