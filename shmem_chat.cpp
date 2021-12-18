@@ -76,9 +76,9 @@ char * map_fd(int fd, size_t size) { return (char *)mmap(0, size, PROT_READ|PROT
 
 int main (int argc, char ** argv) { int r;
 
-    if (!argv[0]) {
+    if (!argv[1]) {
         fprintf(stderr, "specify `server' or `client'\n");
-        abort();
+        exit(-1);
     }
 
     if (strcmp(argv[1], "server") == 0) {
@@ -109,6 +109,8 @@ int main (int argc, char ** argv) { int r;
                     r = sendmsg(client_socket_fd, &msg, 0);
 
                     close(client_data_fd);                    
+                } else {
+                    fprintf(stderr, "server full\n");
                 }
                 close(client_socket_fd);
             } else {
@@ -117,7 +119,7 @@ int main (int argc, char ** argv) { int r;
 
             // All 
 
-            for (int client_i = 0; client_pages[client_i]; client_i++) {
+            for (int client_i = 0; client_pages + client_i < client_pages_next; client_i++) {
                 while (client_pages[client_i][client_read_cursor[client_i]]) {
                     if (last_client != client_i) {
                         write_buf("\nClient %d: ", client_i);
@@ -142,6 +144,10 @@ int main (int argc, char ** argv) { int r;
 
         r = recvmsg(server_fd, &msg, 0);
         error_check(r);
+        if (fdptr[0] == -1) {
+            fprintf(stderr, "server full\n");
+            exit(-1);
+        }
         close(server_fd);
 
         server_data = map_fd(fdptr[0], server_data_size);
@@ -156,11 +162,9 @@ int main (int argc, char ** argv) { int r;
         { // get term settings, and then update them
             static struct termios ts;
             r = tcgetattr(0, &ts);
-            error_check(r);
             ts.c_lflag &= ~ICANON; // disable line buffering
             ts.c_lflag &= ~ECHO;   // disable echo
             r = tcsetattr(0, TCSANOW, &ts);
-            error_check(r);
         }
 
         for (;;) {
