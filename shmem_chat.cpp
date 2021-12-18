@@ -6,13 +6,14 @@ that it can be done securely if you structure your code so that you only read ea
 untrusted buffer once, and often you can do this fine without even having to do a bunch of extra copies..
 
 I do want to say that is rarely the right tool for the job, AF_UNIX/SOCK_SEQPACKET is a much better tool
-for this job, and the spinlocks don't really scale well for idle/intermittent workloads, best save that for high
-throughput operations...
+for this job, and the spinlocks don't really scale well for idle/intermittent workloads, best save shared 
+memory communication for high throughput operations...
 
 */
 
 
-// clang -fuse-ld=lld -Werror -Wall -g -O0 -fsanitize=address shmem_chat.cpp -o build/chat.exec
+// clang -fuse-ld=lld -Werror -Wall -g -O0 -fsanitize=address shmem_chat.cpp -o build/shmem_chat.slow.exec
+// clang -fuse-ld=lld -Werror -Wall -g -Ofast shmem_chat.cpp -o build/shmem_chat.exec
 
 #include <stdarg.h>
 #include <errno.h>
@@ -71,6 +72,7 @@ inline static void __fdlist_msg(char * buf, size_t buf_size, msghdr * msg, int *
         *fds = (int *) (void*) CMSG_DATA(cmsg);
 }
 
+char * map_fd(int fd, size_t size) { return (char *)mmap(0, size, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0); }
 
 int main (int argc, char ** argv) { int r;
 
@@ -82,8 +84,9 @@ int main (int argc, char ** argv) { int r;
     if (strcmp(argv[1], "server") == 0) {
         int server_data_fd = memfd_create("server", MFD_CLOEXEC);
         ftruncate(server_data_fd, server_data_size);
-        server_data = (char*)mmap(0, server_data_size, PROT_WRITE, MAP_SHARED, server_data_fd, 0);
+        server_data = map_fd(server_data_fd, server_data_size);
 
+        // Sockets here are only used to setup the shared memory
         server_socket = socket(AF_UNIX, SOCK_SEQPACKET|SOCK_CLOEXEC|SOCK_NONBLOCK,  0);
         unlink(server_socket_addr.sun_path);
         bind(server_socket, (struct sockaddr*)&server_socket_addr, sizeof server_socket_addr);
@@ -91,13 +94,12 @@ int main (int argc, char ** argv) { int r;
 
         int last_client = -1;
         for (;;) {
-            int client_socket_fd = accept4(server_socket, 0, 0,
-                                    SOCK_NONBLOCK | SOCK_CLOEXEC);
+            int client_socket_fd = accept4(server_socket, 0, 0, SOCK_NONBLOCK | SOCK_CLOEXEC);
             if (client_socket_fd != -1) {
                 write_buf("\nnew_client %lld connected\n", client_pages_next - client_pages);
                 int client_data_fd = memfd_create("client", MFD_CLOEXEC);
                 ftruncate(client_data_fd, client_data_size);
-                *client_pages_next++ = (char*)mmap(0, client_data_size, PROT_READ, MAP_SHARED, client_data_fd, 0);
+                *client_pages_next++ =  map_fd(client_data_fd, client_data_size);
 
                 fdlist_msg(buf, fdptr, msg, 2);
                 fdptr[0] = server_data_fd;
@@ -138,9 +140,9 @@ int main (int argc, char ** argv) { int r;
         error_check(r);
         close(server_fd);
 
-        server_data = (char*)mmap(0, server_data_size, PROT_READ, MAP_SHARED, fdptr[0], 0);
+        server_data = map_fd(fdptr[0], server_data_size);
         close(fdptr[0]);
-        char * client_data = (char*)mmap(0, client_data_size, PROT_WRITE, MAP_SHARED, fdptr[1], 0);
+        char * client_data = map_fd(fdptr[1], client_data_size);
         close(fdptr[1]);
 
         int read_cursor = 0;
