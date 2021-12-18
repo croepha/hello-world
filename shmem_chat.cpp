@@ -96,22 +96,26 @@ int main (int argc, char ** argv) { int r;
         for (;;) {
             int client_socket_fd = accept4(server_socket, 0, 0, SOCK_NONBLOCK | SOCK_CLOEXEC);
             if (client_socket_fd != -1) {
-                write_buf("\nnew_client %lld connected\n", client_pages_next - client_pages);
-                int client_data_fd = memfd_create("client", MFD_CLOEXEC);
-                ftruncate(client_data_fd, client_data_size);
-                *client_pages_next++ =  map_fd(client_data_fd, client_data_size);
+                if (client_pages_next < client_pages + 1024) {
+                    write_buf("\nnew_client %lld connected\n", client_pages_next - client_pages);
+                    int client_data_fd = memfd_create("client", MFD_CLOEXEC);
+                    ftruncate(client_data_fd, client_data_size);
+                    *client_pages_next++ =  map_fd(client_data_fd, client_data_size);
 
-                fdlist_msg(buf, fdptr, msg, 2);
-                fdptr[0] = server_data_fd;
-                fdptr[1] = client_data_fd;
+                    fdlist_msg(buf, fdptr, msg, 2);
+                    fdptr[0] = server_data_fd;
+                    fdptr[1] = client_data_fd;
 
-                r = sendmsg(client_socket_fd, &msg, 0);
+                    r = sendmsg(client_socket_fd, &msg, 0);
 
-                close(client_data_fd);
+                    close(client_data_fd);                    
+                }
                 close(client_socket_fd);
             } else {
                 assert(errno == EAGAIN);
             }
+
+            // All 
 
             for (int client_i = 0; client_pages[client_i]; client_i++) {
                 while (client_pages[client_i][client_read_cursor[client_i]]) {
