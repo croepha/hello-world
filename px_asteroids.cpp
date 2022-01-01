@@ -8,6 +8,7 @@
 // compile px_asteroids; compile soft_window; clang -glldb -fuse-ld=lld -fsanitize=address -F /Library/Frameworks/ -framework SDL2 build/soft_window.o build/px_asteroids.o -o build/px_asteroids.exec
 
 
+#include <cstdlib>
 #include <math.h>
 #include <stdio.h>
 #include <assert.h>
@@ -43,7 +44,46 @@ static inline void draw_box(s32 l, s32 t, s32 w, s32 h, Pixel color) {
     }
 }
 
-static inline void draw_line(s16 x0, s16 y0, s16 x1, s16 y1, Pixel color) {
+static Pixel white = {0xff, 0xff, 0xff, 0xff};
+static Pixel megenta = {0xff, 0x5f, 0xff, 0xff};
+
+typedef float Vector2 __attribute__((ext_vector_type(2)));
+typedef float Mat3x3 __attribute__((matrix_type(3, 3)));
+typedef float Mat3x1 __attribute__((matrix_type(3, 1)));
+typedef float Mat1x3 __attribute__((matrix_type(1, 3)));
+
+Mat3x3 affine_identity() {
+    Mat3x3 o;
+    o[0][0] = 1; o[0][1] = 0; o[0][2] = 0;
+    o[1][0] = 0; o[1][1] = 1; o[1][2] = 0;
+    o[2][0] = 0; o[2][1] = 0; o[2][2] = 1;
+    return o;
+}
+
+
+void affine_translate(Mat3x3 & m, float x, float y) {
+    Mat3x3 o;
+    o[0][0] = 1; o[0][1] = 0; o[0][2] = x;
+    o[1][0] = 0; o[1][1] = 1; o[1][2] = y;
+    o[2][0] = 0; o[2][1] = 0; o[2][2] = 1;
+    m = o * m;
+}
+void affine_translate(Mat3x3 & m, Vector2 vec) {
+    affine_translate(m, vec.x, vec.y);
+}
+void affine_rotate(Mat3x3 & m, float t) {
+    Mat3x3 o;
+    auto r0 = cos(t);
+    auto r1 = sin(t);
+    o[0][0] = r0; o[0][1] = -r1; o[0][2] = 0;
+    o[1][0] = r1; o[1][1] = r0; o[1][2] = 0;
+    o[2][0] = 0; o[2][1] = 0; o[2][2] = 1;
+    m = o * m;
+}
+
+
+static inline void draw_line(Vector2 v0, Vector2 v1, Pixel color) {
+    s16 x0 = v0.x, y0 = v0.y, x1 = v1.x, y1 = v1.y;
     auto const dx =  abs(x1-x0);
     auto const sx = x0 < x1 ? 1 : -1;
     auto const dy = -abs(y1-y0);
@@ -64,78 +104,13 @@ static inline void draw_line(s16 x0, s16 y0, s16 x1, s16 y1, Pixel color) {
     }
 }
 
-static Pixel white = {0xff, 0xff, 0xff, 0xff};
-static Pixel megenta = {0xff, 0x5f, 0xff, 0xff};
-
-struct AffineTransform {
-    float a, b, c,
-          d, e, f,
-          g, h, i;
-
-    void _mul(AffineTransform o) {
-        auto & t = *this;
-        *this = {
-            o.a*t.a + o.b*t.d + o.c*t.g,
-            o.a*t.b + o.b*t.e + o.c*t.h,
-            o.a*t.c + o.b*t.f + o.c*t.i,
-
-            o.d*t.a + o.e*t.d + o.f*t.g,
-            o.d*t.b + o.e*t.e + o.f*t.h,
-            o.d*t.c + o.e*t.f + o.f*t.i,
-
-            o.g*t.a + o.h*t.d + o.i*t.g,
-            o.g*t.b + o.h*t.e + o.i*t.h,
-            o.g*t.c + o.h*t.f + o.i*t.i,
-        };
-    }
-    static auto zero() { return AffineTransform{}; }
-    static auto identity() { auto r=zero(); r.a=r.e=r.i=1; return r;}
-    void translate(float x, float y) { auto o=identity(); o.c=x; o.f=y; _mul(o); }
-    void scale(float s) { auto o=identity(); o.a=o.e=s;  _mul(o); }
-    void rotate(float t) { auto o=zero(); o.a=o.e=cosf(t); o.b = -(o.d = sinf(t)); o.i = 1;  _mul(o); }
-};
-
-
-struct Vector { float x, y; };
-Vector vec_project_point(Vector v, AffineTransform tf) {
-    return {
-        v.x * tf.a + v.y * tf.b + 1.0f * tf.c,
-        v.x * tf.d + v.y * tf.e + 1.0f * tf.f,
-    };
-}
-
-static inline void draw_line(Vector v0, Vector v1, Pixel color) {
-    draw_line(v0.x, v0.y, v1.x, v1.y, color);
-}
-
-typedef float Vector2 __attribute__((ext_vector_type(2)));
-typedef float Mat3x3 __attribute__((matrix_type(3, 3)));
-typedef float Mat3x1 __attribute__((matrix_type(3, 1)));
-typedef float Mat1x3 __attribute__((matrix_type(1, 3)));
-
-static inline void draw_line(Vector2 v0, Vector2 v1, Pixel color) {
-    draw_line(v0.x, v0.y, v1.x, v1.y, color);
-}
-
-
-struct VectorPointer {
-    Vector * vecs; u32 len;
-    template<int len_> VectorPointer(Vector (&vecs_)[len_]) { vecs=vecs_; len = len_; }
-};
-static inline void draw_lines(VectorPointer vecs, AffineTransform at) {
-    for (int i = 1; i < vecs.len; i++) {
-        draw_line(
-            vec_project_point(vecs.vecs[i-1], at),
-            vec_project_point(vecs.vecs[i-0], at),
-            white);
-    }
-}
 
 struct Vector2Pointer {
     Vector2 * vecs; u32 len;
     template<int len_> Vector2Pointer(Vector2 (&vecs_)[len_]) { vecs=vecs_; len = len_; }
 };
 
+// Ideal syntax should allow this: return mat * { vec, 1 } ... or something else that is consise...
 Vector2 vec2_project_point(Vector2 vec, Mat3x3 mat) {
     Mat3x1 vec_m; vec_m[0][0] = vec.x; vec_m[1][0] = vec.y; vec_m[2][0] = 1;
     auto projected = mat * vec_m;
@@ -151,74 +126,51 @@ static inline void draw_lines(Vector2Pointer vecs, Mat3x3 at) {
     }
 }
 
+Vector2 ship_mesh[] = { {-10, 10}, { 0, -10}, { 10, 10}, { -10, 10}, };
+Vector2 asteroid_mesh[] = {
+    {  0, -20},
+    {  5, -15},
+    { 10, -15},
+    { 15, -15},
+    { 20, -10},
+    { 15, -10},
+    { 15,  -5},
+    { 10,  -5},
+    { 10,   0},
+    {  5,   0},
+    {  5,   5},
+    {  0,   5},
+    {  0,  10},
+    {  0, -20},
+};
 
 
+struct Asteroid {
+    Vector2 position; Vector2 velocity;
+    float rotation; float rotation_speed;
+} asteroids[1024];
+int asteroid_count;
 
-// typedef float v2 __attribute__((ext_vector_type(2)));
-// typedef float m4x4_t __attribute__((matrix_type(1, 1)));
+float rand11() { return 2.0f * (float)random()/(float)RAND_MAX - 1.0f; }
 
-// struct mmm {
+void asteroid_spawn() {
+    if (asteroid_count < 1024) {
+        asteroids[asteroid_count++] = {
+            {float(random()%SoftWindow::width), float(random()%SoftWindow::height)},
+            {rand11() *.03f, rand11() *.03f},
+            rand11() * 1.f, rand11() *.001f,
+        };
+    }
+}
 
-//     int eee;
-//     int bbb;
-
-//     int & operator = (int v) {
-//         eee = v;
-//         return bbb;
-//     }
-//     operator int&()  {
-//         return bbb;
-//     };
-
-// };
-
-// template<class T> struct shortcut {
-//     T & ref;
-//     shortcut(T & ref_) : ref(ref_) {}
-//     T & operator = (T v) { return ref = v; }
-//     operator T & ()  { return ref; };
-// };
-
-// struct m {
-//     int v[4];
-//     shortcut<int> a {v[0]};
-// };
-
+float wrap(float v, float min, float max) {
+    auto d = max - min;
+    if (v < min) v += d;
+    if (v > max) v -= d;
+    return v;
+}
 
 int main() {
-
-    // m a = {};
-    // a.a = 1;
-    // int v = a.a;
-    // printf("%d %d %d\n", (int)a.a, a.v[0], v);
-
-
-    // v2 v;
-    // v.xy = 0;
-    // v.yx = 0;
-
-    // m4x4_t m2;
-
-    // m2[0][0]= 0;
-
-    // mmm a = {};
-    // int & v = a;
-    // printf("%d\n", a = 3);
-    // printf("%d %d\n", a.eee, a.bbb);
-    // v = 2;
-    // printf("%d %d\n", a.eee, a.bbb);
-    // printf("%d\n", a = 4);
-    // printf("%d %d\n", a.eee, a.bbb);
-    // a = {6,7};
-    // printf("%d %d\n", a.eee, a.bbb);
-    // printf("%d\n", a = 4);
-
-
-
-
-    // exit(-1);
-
-
 
     SoftWindow::init();
     int should_keep_running = 1;
@@ -230,6 +182,13 @@ int main() {
     float ship_yd = 0;
 
 
+    asteroid_spawn();
+    asteroid_spawn();
+    asteroid_spawn();
+    asteroid_spawn();
+    asteroid_spawn();
+
+
 
     while (should_keep_running) {
         using namespace SoftWindow;
@@ -237,25 +196,21 @@ int main() {
         //draw_box(box_x, box_y, 10, 10, white);
         //draw_line(200, 200, ship_x, ship_y, white);
 
+        for (int i=0; i< asteroid_count; i++ ) {
+            auto& a = asteroids[i];
 
-        Vector2 ship_mesh[] = { {-10, 10}, { 0, -10}, { 10, 10}, { -10, 10}, };
+            auto m = affine_identity();
+            affine_rotate(m, a.rotation);
+            affine_translate(m, a.position);
+            draw_lines(asteroid_mesh, m);
+        }
+
+
         {
-            auto box_m = AffineTransform::identity();
-            box_m.rotate(ship_r);
-            box_m.translate(ship_x, ship_y);
-
-            Mat3x3 m2;
-            m2[0][0] = box_m.a;
-            m2[0][1] = box_m.b;
-            m2[0][2] = box_m.c;
-            m2[1][0] = box_m.d;
-            m2[1][1] = box_m.e;
-            m2[1][2] = box_m.f;
-            m2[2][0] = box_m.g;
-            m2[2][1] = box_m.h;
-            m2[2][2] = box_m.i;
-
-            draw_lines(ship_mesh, m2);
+            auto m = affine_identity();
+            affine_rotate(m, ship_r);
+            affine_translate(m, ship_x, ship_y);
+            draw_lines(ship_mesh, m);
         }
 
         SoftWindow::update();
@@ -279,10 +234,19 @@ int main() {
             ship_rd -= delta_ms * 0.001f *  ship_rd;
         }
 
-        if (ship_x > width ) ship_x -= width;
-        if (ship_x < 0     ) ship_x += width;
-        if (ship_y > height) ship_y -= height;
-        if (ship_y < 0     ) ship_y += height;
+        ship_x = wrap(ship_x, 0, width);
+        ship_y = wrap(ship_y, 0, height);
+        ship_r = wrap(ship_r, 0, 2 * M_PI);
+
+        for (int i=0; i< asteroid_count; i++ ) {
+            auto& a = asteroids[i];
+            a.position += a.velocity * delta_ms;
+            a.rotation += a.rotation_speed * delta_ms;
+            a.position.x = wrap(a.position.x, 0, width);
+            a.position.y = wrap(a.position.y, 0, height);
+            a.position.r = wrap(a.position.r, 0, 2 * M_PI);
+        }
+
 
     }
 }
