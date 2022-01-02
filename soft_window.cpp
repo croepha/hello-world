@@ -1,16 +1,13 @@
-// compile soft_window
 #include <assert.h>
-
+#include <stdarg.h>
+#include <stdio.h>
 #include <SDL2/SDL.h>
-#include <cstdarg>
-#include <cstdio>
 
 #include "soft_window.h"
 
 namespace SoftWindow {
-    void * buffer;
-    u16 width;
-    u16 height;
+    Pixel * pixels;
+    u16 width, height;
     u32 pitch;
     u8 key_presses[256];
     u8 key_downs[256];
@@ -32,13 +29,61 @@ namespace SoftWindow {
 
         width = surface->w;
         height = surface->h;
-        pitch = surface->pitch;
-        buffer = surface->pixels;
+        pitch = surface->pitch / sizeof(Pixel);
+        assert(surface->pitch % sizeof(Pixel) == 0);
+        pixels = (Pixel*)surface->pixels;
     }
 
     void init() {
-        SDL_LogSetAllPriority(SDL_LOG_PRIORITY_VERBOSE);
-        SDL_Init(SDL_INIT_VIDEO);
+        if (sdl_window) {
+            SDL_DestroyWindow(sdl_window);
+        } else {
+            SDL_LogSetAllPriority(SDL_LOG_PRIORITY_VERBOSE);
+            SDL_Init(SDL_INIT_VIDEO);
+
+            keymap[SDL_SCANCODE_LALT] = KEY_LEFT_ALT;
+            keymap[SDL_SCANCODE_RALT] = KEY_RIGHT_ALT;
+            keymap[SDL_SCANCODE_LSHIFT] = KEY_LEFT_SHIFT;
+            keymap[SDL_SCANCODE_RSHIFT] = KEY_RIGHT_SHIFT;
+            keymap[SDL_SCANCODE_LCTRL] = KEY_LEFT_CTRL;
+            keymap[SDL_SCANCODE_RCTRL] = KEY_RIGHT_CTRL;
+            // KEY_QUIT, not a scancode
+            keymap[SDL_SCANCODE_BACKSPACE] = KEY_BACKSPACE;
+            keymap[SDL_SCANCODE_F1] = KEY_F1;
+            keymap[SDL_SCANCODE_F2] = KEY_F2;
+            keymap[SDL_SCANCODE_F3] = KEY_F3;
+            keymap[SDL_SCANCODE_F4] = KEY_F4;
+            keymap[SDL_SCANCODE_F5] = KEY_F5;
+            keymap[SDL_SCANCODE_F6] = KEY_F6;
+            keymap[SDL_SCANCODE_F7] = KEY_F7;
+            keymap[SDL_SCANCODE_F8] = KEY_F8;
+            keymap[SDL_SCANCODE_F9] = KEY_F9;
+            keymap[SDL_SCANCODE_F10] = KEY_F10;
+            keymap[SDL_SCANCODE_F11] = KEY_F11;
+            keymap[SDL_SCANCODE_F12] = KEY_F12;
+            keymap[SDL_SCANCODE_F13] = KEY_F13;
+            keymap[SDL_SCANCODE_F14] = KEY_F14;
+
+            keymap[SDL_SCANCODE_LGUI] = KEY_LEFT_OS;
+            keymap[SDL_SCANCODE_RGUI] = KEY_RIGHT_OS;
+            keymap[SDL_SCANCODE_LEFT] = KEY_LEFT;
+            keymap[SDL_SCANCODE_RIGHT] = KEY_RIGHT;
+            keymap[SDL_SCANCODE_UP] = KEY_UP;
+            keymap[SDL_SCANCODE_DOWN] = KEY_DOWN;
+            keymap[SDL_SCANCODE_ESCAPE] = KEY_ESCAPE;
+            keymap[SDL_SCANCODE_TAB] = KEY_TAB;
+            keymap[SDL_SCANCODE_RETURN] = KEY_RETURN;
+            keymap[SDL_SCANCODE_SPACE] = KEY_SPACE;
+
+            _keymap_from_literal('\'');
+            _keymap_from_literal(';');
+            for (int i = ','; i <= '9'; i++) _keymap_from_literal(i);
+            _keymap_from_literal('=');
+            for (int i = 'A'; i <= ']'; i++) _keymap_from_literal(i);
+            _keymap_from_literal('`');
+            keymap[SDL_SCANCODE_DELETE] = KEY_DELETE;
+        }
+
         sdl_window = SDL_CreateWindow(
             "hello_sdl_pxbuf",
             SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
@@ -47,48 +92,6 @@ namespace SoftWindow {
 
         _init_surface();
 
-
-        keymap[SDL_SCANCODE_LALT] = KEY_LEFT_ALT;
-        keymap[SDL_SCANCODE_RALT] = KEY_RIGHT_ALT;
-        keymap[SDL_SCANCODE_LSHIFT] = KEY_LEFT_SHIFT;
-        keymap[SDL_SCANCODE_RSHIFT] = KEY_RIGHT_SHIFT;
-        keymap[SDL_SCANCODE_LCTRL] = KEY_LEFT_CTRL;
-        keymap[SDL_SCANCODE_RCTRL] = KEY_RIGHT_CTRL;
-        // KEY_QUIT, not a scancode
-        keymap[SDL_SCANCODE_BACKSPACE] = KEY_BACKSPACE;
-        keymap[SDL_SCANCODE_F1] = KEY_F1;
-        keymap[SDL_SCANCODE_F2] = KEY_F2;
-        keymap[SDL_SCANCODE_F3] = KEY_F3;
-        keymap[SDL_SCANCODE_F4] = KEY_F4;
-        keymap[SDL_SCANCODE_F5] = KEY_F5;
-        keymap[SDL_SCANCODE_F6] = KEY_F6;
-        keymap[SDL_SCANCODE_F7] = KEY_F7;
-        keymap[SDL_SCANCODE_F8] = KEY_F8;
-        keymap[SDL_SCANCODE_F9] = KEY_F9;
-        keymap[SDL_SCANCODE_F10] = KEY_F10;
-        keymap[SDL_SCANCODE_F11] = KEY_F11;
-        keymap[SDL_SCANCODE_F12] = KEY_F12;
-        keymap[SDL_SCANCODE_F13] = KEY_F13;
-        keymap[SDL_SCANCODE_F14] = KEY_F14;
-
-        keymap[SDL_SCANCODE_LGUI] = KEY_LEFT_OS;
-        keymap[SDL_SCANCODE_RGUI] = KEY_RIGHT_OS;
-        keymap[SDL_SCANCODE_LEFT] = KEY_LEFT;
-        keymap[SDL_SCANCODE_RIGHT] = KEY_RIGHT;
-        keymap[SDL_SCANCODE_UP] = KEY_UP;
-        keymap[SDL_SCANCODE_DOWN] = KEY_DOWN;
-        keymap[SDL_SCANCODE_ESCAPE] = KEY_ESCAPE;
-        keymap[SDL_SCANCODE_TAB] = KEY_TAB;
-        keymap[SDL_SCANCODE_RETURN] = KEY_RETURN;
-        keymap[SDL_SCANCODE_SPACE] = KEY_SPACE;
-
-        _keymap_from_literal('\'');
-        _keymap_from_literal(';');
-        for (int i = ','; i <= '9'; i++) _keymap_from_literal(i);
-        _keymap_from_literal('=');
-        for (int i = 'A'; i <= ']'; i++) _keymap_from_literal(i);
-        _keymap_from_literal('`');
-        keymap[SDL_SCANCODE_DELETE] = KEY_DELETE;
 
     }
 
@@ -100,6 +103,8 @@ namespace SoftWindow {
 
 
     void update() {
+        if (!sdl_window) init();
+
         SDL_UpdateWindowSurface( sdl_window );
 
         memset(key_presses, 0, sizeof key_presses);

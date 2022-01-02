@@ -6,7 +6,7 @@
 // compile px_asteroids
 // clang -gembed-source -gfull -glldb -fuse-ld=lld -fsanitize=address -F /Library/Frameworks/ -framework SDL2 build/soft_window.o build/px_asteroids.o -o build/px_asteroids.exec
 // compile px_asteroids; compile soft_window; clang -glldb -fuse-ld=lld -fsanitize=address -F /Library/Frameworks/ -framework SDL2 build/soft_window.o build/px_asteroids.o -o build/px_asteroids.exec
-
+// SDKROOT=$(xcrun --sdk macosx --show-sdk-path) PATH=/System/Volumes/Data/w/external/clang+llvm-13.0.0-x86_64-apple-darwin/bin/:$PATH ninja
 
 #include <cstdlib>
 #include <math.h>
@@ -20,8 +20,10 @@ template<class T> T * recast(void * memory, s64 offset = 0) { return (T*)((u8*)m
 
 struct Pixel { u8 red, grn, blu, alf; };
 
-static inline Pixel * get_pixel(s16 px_x, s16 px_y) {
+
+SoftWindow::Pixel * get_pixel(s16 px_x, s16 px_y) {
     if (px_x >= 0 && px_x < SoftWindow::width && px_y >= 0 && px_y < SoftWindow::height) {
+        return SoftWindow::pixels + px_y * SoftWindow::pitch + px_x;
         return recast<Pixel>(SoftWindow::buffer, px_y * SoftWindow::pitch + px_x * 4);
     } else {
         return 0;
@@ -29,14 +31,15 @@ static inline Pixel * get_pixel(s16 px_x, s16 px_y) {
 }
 
 HOTFUNCTION
-static inline Pixel * set_pixel(s16 px_x, s16 px_y, Pixel px) {
+Pixel * set_pixel(s16 px_x, s16 px_y, Pixel px) {
     auto pxp = get_pixel(px_x, px_y);
     if (pxp) { *pxp = px; }
     return pxp;
 }
 
+
 HOTFUNCTION
-static inline void draw_box(s32 l, s32 t, s32 w, s32 h, Pixel color) {
+void draw_box(s32 l, s32 t, s32 w, s32 h, Pixel color) {
     for (int box_px_y = t; box_px_y < t + h; box_px_y++) {
         for (int box_px_x = l; box_px_x < l + w; box_px_x++) {
             set_pixel(box_px_x, box_px_y, color);
@@ -82,7 +85,7 @@ void affine_rotate(Mat3x3 & m, float t) {
 }
 
 
-static inline void draw_line(Vector2 v0, Vector2 v1, Pixel color) {
+void draw_line(Vector2 v0, Vector2 v1, Pixel color) {
     s16 x0 = v0.x, y0 = v0.y, x1 = v1.x, y1 = v1.y;
     auto const dx =  abs(x1-x0);
     auto const sx = x0 < x1 ? 1 : -1;
@@ -110,6 +113,8 @@ struct Vector2Pointer {
     template<int len_> Vector2Pointer(Vector2 (&vecs_)[len_]) { vecs=vecs_; len = len_; }
 };
 
+// Having different types for matrix and vectors seems strange, why not a generalization that has both features
+
 // Ideal syntax should allow this: return mat * { vec, 1 } ... or something else that is consise...
 Vector2 vec2_project_point(Vector2 vec, Mat3x3 mat) {
     Mat3x1 vec_m; vec_m[0][0] = vec.x; vec_m[1][0] = vec.y; vec_m[2][0] = 1;
@@ -128,20 +133,23 @@ static inline void draw_lines(Vector2Pointer vecs, Mat3x3 at) {
 
 Vector2 ship_mesh[] = { {-10, 10}, { 0, -10}, { 10, 10}, { -10, 10}, };
 Vector2 asteroid_mesh[] = {
-    {  0, -20},
-    {  5, -15},
-    { 10, -15},
-    { 15, -15},
-    { 20, -10},
-    { 15, -10},
-    { 15,  -5},
-    { 10,  -5},
-    { 10,   0},
-    {  5,   0},
-    {  5,   5},
-    {  0,   5},
-    {  0,  10},
-    {  0, -20},
+    { -20,   0}, // 0
+    { -15,   5}, //  1
+    { -17,  17}, //   2
+    {  -5,  15}, //  1
+    {   0,  20}, // 0
+    {   5,  15}, //  1
+    {  17,  17}, //   2
+    {  15,   5}, //  1
+    {  20,   0}, // 0
+    {  15,  -5}, //  1
+    {  17, -17}, //   2
+    {   5, -15}, //  1
+    {   0, -20}, // 0
+    {  -5, -15}, //  1
+    { -17, -17}, //   2
+    { -15,  -5}, //  1
+    { -20,   0}, // 0
 };
 
 
@@ -164,10 +172,7 @@ void asteroid_spawn() {
 }
 
 float wrap(float v, float min, float max) {
-    auto d = max - min;
-    if (v < min) v += d;
-    if (v > max) v -= d;
-    return v;
+    return fmod(v + max-min, max-min)+min;
 }
 
 int main() {
@@ -182,13 +187,7 @@ int main() {
     float ship_yd = 0;
 
 
-    asteroid_spawn();
-    asteroid_spawn();
-    asteroid_spawn();
-    asteroid_spawn();
-    asteroid_spawn();
-
-
+    for (int i=0; i<10; i++) asteroid_spawn();
 
     while (should_keep_running) {
         using namespace SoftWindow;
@@ -244,7 +243,7 @@ int main() {
             a.rotation += a.rotation_speed * delta_ms;
             a.position.x = wrap(a.position.x, 0, width);
             a.position.y = wrap(a.position.y, 0, height);
-            a.position.r = wrap(a.position.r, 0, 2 * M_PI);
+            a.rotation = wrap(a.rotation, 0, 2.0f * M_PI);
         }
 
 

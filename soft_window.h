@@ -9,7 +9,8 @@ typedef          long  s64;
 
 namespace SoftWindow {
 
-    extern void * buffer;
+
+    struct Pixel { u8 red, grn, blu, alf; } extern * pixels;
     extern u16 width, height;
     extern u32 pitch;
     extern unsigned char key_presses[256];
@@ -64,6 +65,6 @@ namespace SoftWindow {
 
     void init();
     void update();
-    void set_title(char const * fmt, ...);
+    void set_title(char const * fmt, ...); // This is a slow operation
 
 }
