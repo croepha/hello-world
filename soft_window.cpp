@@ -148,7 +148,6 @@ namespace SoftWindow {
                     mouse_y = evt.motion.y;
                 } break;
                 case SDL_MOUSEBUTTONDOWN: {
-                    printf("mouse button %d\n", evt.button.button);
                     if (evt.button.button > 16) {
                         SDL_LogError(SDL_LOG_CATEGORY_ERROR, "Bad mouse button: %d\n", evt.button.button);
                     } else {
