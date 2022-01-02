@@ -8,9 +8,7 @@ typedef          int   s32;
 typedef          long  s64;
 
 namespace SoftWindow {
-
-
-    struct Pixel { u8 red, grn, blu, alf; } extern * pixels;
+    struct Color { u8 red, grn, blu, alf; } extern * pixels;
     extern u16 width, height, mouse_x, mouse_y;
     extern s16 mouse_dx, mouse_dy;
     extern u32 pitch;

@@ -6,7 +6,7 @@
 #include "soft_window.h"
 
 namespace SoftWindow {
-    Pixel * pixels;
+    Color * pixels;
     u16 width, height, mouse_x, mouse_y;
     s16 mouse_dx, mouse_dy;
     u32 pitch;
@@ -30,9 +30,9 @@ namespace SoftWindow {
 
         width = surface->w;
         height = surface->h;
-        pitch = surface->pitch / sizeof(Pixel);
-        assert(surface->pitch % sizeof(Pixel) == 0);
-        pixels = (Pixel*)surface->pixels;
+        pitch = surface->pitch / sizeof(Color);
+        assert(surface->pitch % sizeof(Color) == 0);
+        pixels = (Color*)surface->pixels;
     }
 
     void init() {
@@ -148,6 +148,8 @@ namespace SoftWindow {
                     mouse_y = evt.motion.y;
                 } break;
                 case SDL_MOUSEBUTTONDOWN: {
+                    // TODO: Maybe button left/middle/right/x1/x2 make more sense
+                    // TODO: It seems like evt.button.button is never 0... maybe we should change how this works
                     if (evt.button.button > 16) {
                         SDL_LogError(SDL_LOG_CATEGORY_ERROR, "Bad mouse button: %d\n", evt.button.button);
                     } else {
