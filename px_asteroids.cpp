@@ -14,24 +14,19 @@
 #include <assert.h>
 #include "soft_window.h"
 
-template<class T> T * recast(void * memory, s64 offset = 0) { return (T*)((u8*)memory + offset); }
 
 #define HOTFUNCTION __attribute__((no_sanitize("address")))
-
-struct Pixel { u8 red, grn, blu, alf; };
-
 
 SoftWindow::Pixel * get_pixel(s16 px_x, s16 px_y) {
     if (px_x >= 0 && px_x < SoftWindow::width && px_y >= 0 && px_y < SoftWindow::height) {
         return SoftWindow::pixels + px_y * SoftWindow::pitch + px_x;
-        return recast<Pixel>(SoftWindow::buffer, px_y * SoftWindow::pitch + px_x * 4);
     } else {
         return 0;
     }
 }
 
 HOTFUNCTION
-Pixel * set_pixel(s16 px_x, s16 px_y, Pixel px) {
+SoftWindow::Pixel * set_pixel(s16 px_x, s16 px_y, SoftWindow::Pixel px) {
     auto pxp = get_pixel(px_x, px_y);
     if (pxp) { *pxp = px; }
     return pxp;
@@ -39,7 +34,7 @@ Pixel * set_pixel(s16 px_x, s16 px_y, Pixel px) {
 
 
 HOTFUNCTION
-void draw_box(s32 l, s32 t, s32 w, s32 h, Pixel color) {
+void draw_box(s32 l, s32 t, s32 w, s32 h, SoftWindow::Pixel color) {
     for (int box_px_y = t; box_px_y < t + h; box_px_y++) {
         for (int box_px_x = l; box_px_x < l + w; box_px_x++) {
             set_pixel(box_px_x, box_px_y, color);
@@ -47,8 +42,8 @@ void draw_box(s32 l, s32 t, s32 w, s32 h, Pixel color) {
     }
 }
 
-static Pixel white = {0xff, 0xff, 0xff, 0xff};
-static Pixel megenta = {0xff, 0x5f, 0xff, 0xff};
+static SoftWindow::Pixel white = {0xff, 0xff, 0xff, 0xff};
+static SoftWindow::Pixel megenta = {0xff, 0x5f, 0xff, 0xff};
 
 typedef float Vector2 __attribute__((ext_vector_type(2)));
 typedef float Mat3x3 __attribute__((matrix_type(3, 3)));
@@ -85,7 +80,7 @@ void affine_rotate(Mat3x3 & m, float t) {
 }
 
 
-void draw_line(Vector2 v0, Vector2 v1, Pixel color) {
+void draw_line(Vector2 v0, Vector2 v1, SoftWindow::Pixel color) {
     s16 x0 = v0.x, y0 = v0.y, x1 = v1.x, y1 = v1.y;
     auto const dx =  abs(x1-x0);
     auto const sx = x0 < x1 ? 1 : -1;

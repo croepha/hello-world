@@ -7,7 +7,8 @@
 
 namespace SoftWindow {
     Pixel * pixels;
-    u16 width, height;
+    u16 width, height, mouse_x, mouse_y;
+    s16 mouse_dx, mouse_dy;
     u32 pitch;
     u8 key_presses[256];
     u8 key_downs[256];
@@ -95,9 +96,10 @@ namespace SoftWindow {
 
     }
 
-    static void _do_keypress(u8 key) {
-        if (key_presses[key] < 250) key_presses[key]++;
-        key_downs[key] = 1;
+    static void _do_keypress(u8 key, int presses = 1) {
+        if (key_presses[key] + presses < 250) key_presses[key]+= presses;
+        else key_presses[key] = 250;
+        key_downs[key] = presses;
     }
     static void _do_keyup(u8 key) { key_downs[key] = 0; }
 
@@ -135,6 +137,30 @@ namespace SoftWindow {
                 case SDL_QUIT: { _do_keypress(KEY_QUIT); } break;
                 case SDL_KEYDOWN: { _do_keypress(keymap[evt.key.keysym.scancode]); } break;
                 case SDL_KEYUP: { _do_keyup(keymap[evt.key.keysym.scancode]); } break;
+                case SDL_MOUSEMOTION: {
+                    if (__builtin_add_overflow(mouse_dx, evt.motion.xrel, &mouse_dx)) {
+                        mouse_dx = -1;
+                    }
+                    if (__builtin_add_overflow(mouse_dy, evt.motion.yrel, &mouse_dy)) {
+                        mouse_dy = -1;
+                    }
+                    mouse_x = evt.motion.x;
+                    mouse_y = evt.motion.y;
+                } break;
+                case SDL_MOUSEBUTTONDOWN: {
+                    if (evt.button.button > 16) {
+                        SDL_LogError(SDL_LOG_CATEGORY_ERROR, "Bad mouse button: %d\n", evt.button.button);
+                    } else {
+                        _do_keypress(KEY_MOUSE_0 + evt.button.button);
+                    }
+                } break;
+                case SDL_MOUSEBUTTONUP: {
+                    if (evt.button.button > 16) {
+                        SDL_LogError(SDL_LOG_CATEGORY_ERROR, "Bad mouse button: %d\n", evt.button.button);
+                    } else {
+                        _do_keyup(KEY_MOUSE_0 + evt.button.button);
+                    }
+                } break;
             }
         }
     }

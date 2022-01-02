@@ -11,7 +11,8 @@ namespace SoftWindow {
 
 
     struct Pixel { u8 red, grn, blu, alf; } extern * pixels;
-    extern u16 width, height;
+    extern u16 width, height, mouse_x, mouse_y;
+    extern s16 mouse_dx, mouse_dy;
     extern u32 pitch;
     extern unsigned char key_presses[256];
     extern unsigned char key_downs[256];
@@ -49,7 +50,10 @@ namespace SoftWindow {
         // 96 Reserved for literal: `
         // 97 - 126 Open
         KEY_DELETE = 127,
-        // 128 - 255 Open
+        KEY_MOUSE_0, KEY_MOUSE_1, KEY_MOUSE_2, KEY_MOUSE_3, KEY_MOUSE_4, KEY_MOUSE_5,
+        KEY_MOUSE_6, KEY_MOUSE_7, KEY_MOUSE_8, KEY_MOUSE_9, KEY_MOUSE_10, KEY_MOUSE_11,
+        KEY_MOUSE_12, KEY_MOUSE_13, KEY_MOUSE_14, KEY_MOUSE_15,
+        // 144 - 255 Open
         KEY_INVALID_OVERFLOW = 256
     };
 

@@ -1,0 +1,44 @@
+
+
+#// export SDKROOT=$(xcrun --sdk macosx --show-sdk-path)
+#// PATH=/System/Volumes/Data/w/external/clang+llvm-13.0.0-x86_64-apple-darwin/bin/:$PATH
+
+
+common_flags = -F /Library/Frameworks/ -glldb -ffast-math -fno-rtti -fno-exceptions -fenable-matrix
+common_compile_flags = -std=gnu++2b -Werror -Wduplicate-enum -Wshadow-all -c
+builddir = build
+
+rule compile-debug
+    command = clang $common_flags $common_compile_flags -fsanitize=address -O0  $in -MMD -MT $oud.d -o $out $flags
+    description = COMPILE-DEBUG: $out
+    depfile = $out.d
+    deps = gcc
+
+rule compile-fast
+    command = clang $common_flags $common_compile_flags -flto -Ofast $in -MMD -MT $oud.d -o $out $flags
+    description = COMPILE-FAST: $out
+    depfile = $out.d
+    deps = gcc
+
+rule link
+    command = clang $common_flags -fuse-ld=lld -flto -fsanitize=address  $in -o $out $flags
+
+
+build $builddir/px_asteroids.fast.o: compile-fast px_asteroids.cpp
+build $builddir/px_asteroids.debug.o: compile-debug px_asteroids.cpp
+build $builddir/soft_window.fast.o: compile-fast soft_window.cpp
+build $builddir/soft_window.debug.o: compile-debug soft_window.cpp
+
+build $builddir/hello_paint.fast.o: compile-fast hello_paint.cpp
+build $builddir/hello_paint.debug.o: compile-debug hello_paint.cpp
+
+#build $builddir/px_asteroids.debug.exec: link $builddir/soft_window.debug.o $builddir/px_asteroids.debug.o
+build $builddir/px_asteroids.debug.exec: link $builddir/soft_window.fast.o $builddir/px_asteroids.debug.o
+    flags = -framework SDL2
+build $builddir/px_asteroids.fast.exec: link $builddir/soft_window.fast.o $builddir/px_asteroids.fast.o
+    flags = -framework SDL2
+
+build $builddir/hello_paint.debug.exec: link $builddir/soft_window.debug.o $builddir/hello_paint.debug.o
+    flags = -framework SDL2
+build $builddir/hello_paint.fast.exec: link $builddir/soft_window.fast.o $builddir/hello_paint.fast.o
+    flags = -framework SDL2
