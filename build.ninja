@@ -24,21 +24,30 @@ rule link
     command = clang $common_flags -fuse-ld=lld -flto -fsanitize=address  $in -o $out $flags
 
 
-build $builddir/px_asteroids.fast.o: compile-fast px_asteroids.cpp
-build $builddir/px_asteroids.debug.o: compile-debug px_asteroids.cpp
+
 build $builddir/soft_window.fast.o: compile-fast soft_window.cpp
 build $builddir/soft_window.debug.o: compile-debug soft_window.cpp
 
-build $builddir/hello_paint.fast.o: compile-fast hello_paint.cpp
-build $builddir/hello_paint.debug.o: compile-debug hello_paint.cpp
 
-#build $builddir/px_asteroids.debug.exec: link $builddir/soft_window.debug.o $builddir/px_asteroids.debug.o
+build $builddir/px_asteroids.debug.o: compile-debug px_asteroids.cpp
 build $builddir/px_asteroids.debug.exec: link $builddir/soft_window.fast.o $builddir/px_asteroids.debug.o
     flags = -framework SDL2
+build $builddir/px_asteroids.fast.o: compile-fast px_asteroids.cpp
 build $builddir/px_asteroids.fast.exec: link $builddir/soft_window.fast.o $builddir/px_asteroids.fast.o
     flags = -framework SDL2
 
+build $builddir/hello_paint.debug.o: compile-debug hello_paint.cpp
 build $builddir/hello_paint.debug.exec: link $builddir/soft_window.debug.o $builddir/hello_paint.debug.o
     flags = -framework SDL2
+build $builddir/hello_paint.fast.o: compile-fast hello_paint.cpp
 build $builddir/hello_paint.fast.exec: link $builddir/soft_window.fast.o $builddir/hello_paint.fast.o
     flags = -framework SDL2
+
+build $builddir/hello_grids.fast.o: compile-fast hello_grids.cpp
+build $builddir/hello_grids.debug.exec: link $builddir/soft_window.debug.o $builddir/hello_grids.debug.o
+    flags = -framework SDL2
+build $builddir/hello_grids.debug.o: compile-debug hello_grids.cpp
+build $builddir/hello_grids.fast.exec: link $builddir/soft_window.fast.o $builddir/hello_grids.fast.o
+    flags = -framework SDL2
+
+
